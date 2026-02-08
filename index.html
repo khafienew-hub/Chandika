@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CHANDIKA PRO V9.0.2 - COMMAND CENTER</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="ico.png">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -47,9 +50,35 @@
             }
             .log-section { grid-column: 2; grid-row: 1 / 3; }
         }
+
+        /* Styles untuk Modal Input Ngrok */
+        #ngrok-modal {
+            backdrop-filter: blur(20px);
+            background: rgba(0, 0, 0, 0.85);
+        }
     </style>
 </head>
 <body class="p-4 md:p-10 lg:p-12">
+
+    <div id="ngrok-modal" class="fixed inset-0 z-[9999] hidden flex items-center justify-center p-4">
+        <div class="glass-card p-8 rounded-3xl max-w-md w-full text-center border border-orange-500/30 shadow-[0_0_50px_rgba(249,115,22,0.1)]">
+            <i class="fas fa-satellite-dish text-4xl text-orange-500 mb-4 animate-pulse"></i>
+            <h2 class="text-2xl font-bold text-white mb-2">SYSTEM LINK</h2>
+            <p class="text-slate-400 text-xs mb-6">Masukkan URL Ngrok terbaru untuk menghubungkan Dashboard ke Laptop.</p>
+            
+            <input type="text" id="ngrok-input" placeholder="https://xxxx-xxxx.ngrok-free.app" 
+                class="w-full bg-slate-800/50 border border-slate-600 rounded-xl p-4 text-white text-center focus:border-orange-500 focus:outline-none mb-4 transition-colors">
+            
+            <button onclick="saveNgrokUrl()" 
+                class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg active:scale-95">
+                HUBUNGKAN SYSTEM
+            </button>
+        </div>
+    </div>
+
+    <button onclick="resetNgrokUrl()" class="fixed bottom-4 right-4 z-50 bg-slate-800/80 text-slate-500 hover:text-orange-500 p-2 px-4 rounded-full text-[10px] font-bold border border-white/5 backdrop-blur-sm transition-all hover:border-orange-500/50">
+        <i class="fas fa-cog mr-1"></i> GANTI URL
+    </button>
 
     <div class="max-w-[1400px] mx-auto">
         <header class="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
@@ -59,7 +88,7 @@
             </div>
             <div class="flex items-center gap-4">
                 <div id="status-badge" class="px-6 py-2 rounded-full text-xs font-bold glass-card border-slate-700 tracking-widest">
-                    CONNECTING...
+                    WAITING CONFIG...
                 </div>
                 <div class="hidden md:block glass-card p-2 px-4 rounded-xl text-[10px] text-slate-400">
                     <i class="fas fa-clock mr-2 text-orange-500"></i><span id="live-clock">00:00:00</span>
@@ -133,115 +162,173 @@
     </div>
 
     <script>
-        // GANTI LINK DI BAWAH INI SESUAI NGROK ANDA
-        const API_URL = "https://adverbless-danna-physiognomically.ngrok-free.dev"; 
+        // ============================================================
+        // LOGIKA PENANGANAN URL NGROK (MODIFIKASI)
+        // ============================================================
+        let API_URL = ""; 
+        const STORAGE_KEY = 'chandika_ngrok_url';
+        const modal = document.getElementById('ngrok-modal');
+        const inputField = document.getElementById('ngrok-input');
 
-    // Update Jam Digital
-    setInterval(() => {
-        const now = new Date();
-        document.getElementById('live-clock').innerText = now.toLocaleTimeString('id-ID');
-    }, 1000);
-
-    async function updateData() {
-        try {
-            const response = await fetch(`${API_URL}/status`, {
-                headers: { 'ngrok-skip-browser-warning': 'true' }
-            });
-            const data = await response.json();
+        // Fungsi dijalankan saat awal load
+        function initSystem() {
+            const savedUrl = localStorage.getItem(STORAGE_KEY);
             
-            // ============================================================
-            // 1. UPDATE EQUITY & PNL (LANGSUNG DARI PYTHON)
-            // ============================================================
-            // Gunakan ID 'equity' (sesuai yang ada di HTML Ndan)
-            const equityElement = document.getElementById('equity');
-            const pnlElement = document.getElementById('live-pnl');
-            
-            let equityVal = data.account_equity || 0;
-            let pnlVal = data.total_pnl || 0;
-
-            // Tampilkan dengan format Dollar
-            equityElement.innerText = "$" + equityVal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-
-            const sign = pnlVal >= 0 ? '+' : '-';
-            const absPnl = Math.abs(pnlVal).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            
-            pnlElement.innerText = `${sign} $ ${absPnl}`;
-            pnlElement.className = pnlVal >= 0 ? 'text-green-400' : 'text-red-400';
-            
-            // Efek Glow kalau profit/loss diatas $5
-            if(Math.abs(pnlVal) > 5) pnlElement.classList.add('drop-shadow-[0_0_8px_rgba(74,222,128,0.3)]');
-            else pnlElement.classList.remove('drop-shadow-[0_0_8px_rgba(74,222,128,0.3)]');
-
-            // 2. Status Badge
-            const badge = document.getElementById('status-badge');
-            badge.innerText = data.is_running ? "• SYSTEM ACTIVE" : "• SYSTEM PAUSED";
-            badge.className = `px-6 py-2 rounded-full text-[10px] font-bold glass-card ${data.is_running ? 'text-green-500 border-green-500/30 status-pulse shadow-[0_0_15px_rgba(34,197,94,0.1)]' : 'text-red-500 border-red-500/30'}`;
-            
-            // ============================================================
-            // 3. UPDATE LIST POSISI (TANPA DIBAGI KURS LAGI)
-            // ============================================================
-            const posList = document.getElementById('position-list');
-            const posCount = document.getElementById('pos-count');
-            
-            if (data.active_trades && data.active_trades.length > 0) {
-                posCount.innerText = data.active_trades.length;
-                posList.innerHTML = data.active_trades.map(trade => {
-                    // trade.profit sudah dikonversi oleh Python
-                    let pTrade = trade.profit; 
-                    
-                    return `
-                    <div class="bg-slate-800/60 border border-white/5 rounded-2xl p-4 hover:border-orange-500/20 transition-all">
-                        <div class="flex justify-between items-start mb-2">
-                            <div>
-                                <span class="text-[9px] font-black px-2 py-0.5 rounded ${trade.type === 'BUY' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}">${trade.type}</span>
-                                <span class="text-xs font-bold ml-1 text-white">${trade.symbol}</span>
-                            </div>
-                            <div class="text-xs font-bold ${pTrade >= 0 ? 'text-green-400' : 'text-red-400'}">
-                                ${pTrade >= 0 ? '+' : '-'} $${Math.abs(pTrade).toFixed(2)}
-                            </div>
-                        </div>
-                        <div class="flex justify-between items-center text-[9px] text-slate-500 border-t border-white/5 pt-2">
-                            <span>Lot: <span class="text-slate-300 font-bold">${trade.volume}</span></span>
-                            <span>SL: <span class="text-red-400/70">${trade.sl || '---'}</span></span>
-                            <span>TP: <span class="text-green-400/70">${trade.tp || '---'}</span></span>
-                        </div>
-                    </div>`;
-                }).join('');
+            if (savedUrl) {
+                // Jika URL sudah ada di memori browser
+                API_URL = savedUrl;
+                modal.classList.add('hidden'); // Sembunyikan modal
+                startDashboard(); // Jalankan dashboard
             } else {
-                posCount.innerText = "0";
-                posList.innerHTML = `<p class="text-[10px] text-slate-600 italic text-center py-4">No active trades</p>`;
+                // Jika belum ada URL, tampilkan modal
+                modal.classList.remove('hidden');
+                modal.style.display = 'flex';
+                document.getElementById('status-badge').innerText = "WAITING INPUT...";
             }
-
-            // 4. System Logs
-            if(data.last_logs && data.last_logs.length > 0) {
-                document.getElementById('logs').innerHTML = data.last_logs.map(line => 
-                    `<div class="border-b border-white/5 pb-2 hover:bg-white/5 transition-colors p-2 rounded-lg">
-                        <span class="text-orange-500/40 mr-2">>>></span> ${line}
-                    </div>`
-                ).join("");
-                const box = document.getElementById('logs');
-                box.scrollTop = box.scrollHeight;
-            }
-        } catch (e) {
-            document.getElementById('status-badge').innerText = "• RECONNECTING...";
         }
-    }
 
-    async function sendControl(cmd) {
-        const confirmMsg = cmd === 'START' ? 'Deploy robot ke pasar live?' : 'Hentikan semua aktivitas trading?';
-        if(confirm(confirmMsg)) {
+        // Fungsi Simpan URL dari Modal
+        function saveNgrokUrl() {
+            let val = inputField.value.trim();
+            
+            if (!val) {
+                alert("Mohon masukkan link Ngrok!");
+                return;
+            }
+
+            // Pastikan format benar (tambah https jika lupa, hapus slash di akhir)
+            if (!val.startsWith("http")) val = "https://" + val;
+            if (val.endsWith("/")) val = val.slice(0, -1);
+
+            localStorage.setItem(STORAGE_KEY, val);
+            location.reload(); // Reload halaman untuk memulai dengan bersih
+        }
+
+        // Fungsi Reset URL (Tombol Pojok Kanan Bawah)
+        function resetNgrokUrl() {
+            if(confirm("Ganti alamat Ngrok? Dashboard akan di-refresh.")) {
+                localStorage.removeItem(STORAGE_KEY);
+                location.reload();
+            }
+        }
+
+        // ============================================================
+        // LOGIKA DASHBOARD ASLI (DIBUNGKUS DALAM FUNGSI)
+        // ============================================================
+        
+        // Update Jam Digital (Jalan terus ga masalah)
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('live-clock').innerText = now.toLocaleTimeString('id-ID');
+        }, 1000);
+
+        // Fungsi Start Dashboard (Hanya jalan setelah URL diset)
+        function startDashboard() {
+            console.log("System started with node: " + API_URL);
+            document.getElementById('status-badge').innerText = "CONNECTING...";
+            
+            // Jalankan update pertama kali langsung
+            updateData();
+            // Lalu ulangi setiap 2 detik
+            setInterval(updateData, 2000);
+        }
+
+        async function updateData() {
+            if(!API_URL) return; // Jaga-jaga kalau URL kosong
+
             try {
-                await fetch(`${API_URL}/remote_control`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-                    body: JSON.stringify({ command: cmd })
+                const response = await fetch(`${API_URL}/status`, {
+                    headers: { 'ngrok-skip-browser-warning': 'true' }
                 });
-            } catch (e) { alert("Gagal kirim sinyal ke laptop!"); }
-        }
-    }
+                const data = await response.json();
+                
+                // 1. UPDATE EQUITY & PNL
+                const equityElement = document.getElementById('equity');
+                const pnlElement = document.getElementById('live-pnl');
+                
+                let equityVal = data.account_equity || 0;
+                let pnlVal = data.total_pnl || 0;
 
-    setInterval(updateData, 2000);
-    updateData();
+                equityElement.innerText = "$" + equityVal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+                const sign = pnlVal >= 0 ? '+' : '-';
+                const absPnl = Math.abs(pnlVal).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                
+                pnlElement.innerText = `${sign} $ ${absPnl}`;
+                pnlElement.className = pnlVal >= 0 ? 'text-green-400' : 'text-red-400';
+                
+                if(Math.abs(pnlVal) > 5) pnlElement.classList.add('drop-shadow-[0_0_8px_rgba(74,222,128,0.3)]');
+                else pnlElement.classList.remove('drop-shadow-[0_0_8px_rgba(74,222,128,0.3)]');
+
+                // 2. Status Badge
+                const badge = document.getElementById('status-badge');
+                badge.innerText = data.is_running ? "• SYSTEM ACTIVE" : "• SYSTEM PAUSED";
+                badge.className = `px-6 py-2 rounded-full text-[10px] font-bold glass-card ${data.is_running ? 'text-green-500 border-green-500/30 status-pulse shadow-[0_0_15px_rgba(34,197,94,0.1)]' : 'text-red-500 border-red-500/30'}`;
+                
+                // 3. UPDATE LIST POSISI
+                const posList = document.getElementById('position-list');
+                const posCount = document.getElementById('pos-count');
+                
+                if (data.active_trades && data.active_trades.length > 0) {
+                    posCount.innerText = data.active_trades.length;
+                    posList.innerHTML = data.active_trades.map(trade => {
+                        let pTrade = trade.profit; 
+                        
+                        return `
+                        <div class="bg-slate-800/60 border border-white/5 rounded-2xl p-4 hover:border-orange-500/20 transition-all">
+                            <div class="flex justify-between items-start mb-2">
+                                <div>
+                                    <span class="text-[9px] font-black px-2 py-0.5 rounded ${trade.type === 'BUY' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}">${trade.type}</span>
+                                    <span class="text-xs font-bold ml-1 text-white">${trade.symbol}</span>
+                                </div>
+                                <div class="text-xs font-bold ${pTrade >= 0 ? 'text-green-400' : 'text-red-400'}">
+                                    ${pTrade >= 0 ? '+' : '-'} $${Math.abs(pTrade).toFixed(2)}
+                                </div>
+                            </div>
+                            <div class="flex justify-between items-center text-[9px] text-slate-500 border-t border-white/5 pt-2">
+                                <span>Lot: <span class="text-slate-300 font-bold">${trade.volume}</span></span>
+                                <span>SL: <span class="text-red-400/70">${trade.sl || '---'}</span></span>
+                                <span>TP: <span class="text-green-400/70">${trade.tp || '---'}</span></span>
+                            </div>
+                        </div>`;
+                    }).join('');
+                } else {
+                    posCount.innerText = "0";
+                    posList.innerHTML = `<p class="text-[10px] text-slate-600 italic text-center py-4">No active trades</p>`;
+                }
+
+                // 4. System Logs
+                if(data.last_logs && data.last_logs.length > 0) {
+                    document.getElementById('logs').innerHTML = data.last_logs.map(line => 
+                        `<div class="border-b border-white/5 pb-2 hover:bg-white/5 transition-colors p-2 rounded-lg">
+                            <span class="text-orange-500/40 mr-2">>>></span> ${line}
+                        </div>`
+                    ).join("");
+                    const box = document.getElementById('logs');
+                    box.scrollTop = box.scrollHeight;
+                }
+            } catch (e) {
+                document.getElementById('status-badge').innerText = "• RECONNECTING...";
+            }
+        }
+
+        async function sendControl(cmd) {
+            if(!API_URL) return alert("System URL belum diset!");
+
+            const confirmMsg = cmd === 'START' ? 'Deploy robot ke pasar live?' : 'Hentikan semua aktivitas trading?';
+            if(confirm(confirmMsg)) {
+                try {
+                    await fetch(`${API_URL}/remote_control`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+                        body: JSON.stringify({ command: cmd })
+                    });
+                } catch (e) { alert("Gagal kirim sinyal ke laptop!"); }
+            }
+        }
+
+        // JALANKAN CHECKER PERTAMA KALI
+        initSystem();
     </script>
 </body>
 </html>

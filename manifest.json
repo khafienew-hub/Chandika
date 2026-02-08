@@ -1,23 +1,23 @@
 {
-    "name": "CHANDIKA PRO COMMAND CENTER",
-    "short_name": "CHANDIKA PRO",
-    "start_url": "./index.html",
-    "display": "standalone",
-    "background_color": "#0f172a",
-    "theme_color": "#1e293b",
-    "orientation": "portrait-primary",
-    "icons": [
-        {
-            "src": "ico.png",
-            "sizes": "192x192",
-            "type": "image/png",
-            "purpose": "any maskable"
-        },
-        {
-            "src": "ico.png",
-            "sizes": "512x512",
-            "type": "image/png",
-            "purpose": "any maskable"
-        }
-    ]
+  "name": "CHANDIKA PRO COMMAND CENTER",
+  "short_name": "ChandikaPRO",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "ico.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "ico.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }

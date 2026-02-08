@@ -1,593 +1,70 @@
-<!DOCTYPE html>
-<html lang="id" class="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CHANDIKA PRO V9.0.2 - COMMAND CENTER</title>
-    <link rel="manifest" href="manifest.json">
-    <link rel="icon" type="image/png" href="ico.png">
-    
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        slate: { 850: '#151e2e' }
+const CACHE_NAME = 'chandika-pro-v9.0.2';
+const DYNAMIC_CACHE = 'chandika-dynamic-v1';
+
+// Daftar file statis yang WAJIB di-cache agar aplikasi bisa buka tanpa internet
+const ASSETS_TO_CACHE = [
+    './',
+    './index.html',
+    './manifest.json',
+    './ico.png', // Pastikan Anda punya file ini
+    // CDN External (Opsional: lebih baik download file ini jika ingin 100% offline)
+    'https://cdn.tailwindcss.com',
+    'https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css'
+];
+
+// 1. Install Service Worker & Cache Aset Statis
+self.addEventListener('install', (event) => {
+    console.log('[Service Worker] Installing...');
+    event.waitUntil(
+        caches.open(CACHE_NAME).then((cache) => {
+            console.log('[Service Worker] Caching App Shell');
+            return cache.addAll(ASSETS_TO_CACHE);
+        })
+    );
+});
+
+// 2. Activate & Bersihkan Cache Lama (Jika ganti versi)
+self.addEventListener('activate', (event) => {
+    console.log('[Service Worker] Activating...');
+    event.waitUntil(
+        caches.keys().then((keyList) => {
+            return Promise.all(keyList.map((key) => {
+                if (key !== CACHE_NAME && key !== DYNAMIC_CACHE) {
+                    console.log('[Service Worker] Removing old cache', key);
+                    return caches.delete(key);
+                }
+            }));
+        })
+    );
+    return self.clients.claim();
+});
+
+// 3. Fetch Strategy: Network First (Prioritas Internet, kalau mati baru ambil Cache)
+// Ini penting untuk Trading Dashboard agar harga tidak "nyangkut" di harga lama
+self.addEventListener('fetch', (event) => {
+    const url = new URL(event.request.url);
+
+    // Jangan cache request ke API Ngrok (biar data selalu real-time)
+    if (url.href.includes('ngrok-free.app')) {
+        return; 
+    }
+
+    event.respondWith(
+        fetch(event.request)
+            .then((networkResponse) => {
+                // Jika berhasil ambil dari internet, simpan copy-nya ke cache dinamis
+                return caches.open(DYNAMIC_CACHE).then((cache) => {
+                    // Cache hanya file GET, bukan POST/PUT
+                    if(event.request.method === 'GET') {
+                        cache.put(event.request, networkResponse.clone());
                     }
-                }
-            }
-        }
-    </script>
-    
-    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&display=swap');
-        
-        :root {
-            --bg-primary: #0f172a;
-            --bg-secondary: #1e293b;
-            --text-primary: #f8fafc;
-            --accent-color: #f97316;
-            --card-bg: rgba(30, 41, 59, 0.6);
-        }
-        
-        /* Light Mode Variables */
-        html:not(.dark) {
-            --bg-primary: #f8fafc;
-            --bg-secondary: #ffffff;
-            --text-primary: #1e293b;
-            --accent-color: #ea580c;
-            --card-bg: rgba(255, 255, 255, 0.85);
-        }
-        
-        body { 
-            background: var(--bg-primary);
-            color: var(--text-primary); 
-            font-family: 'Space Grotesk', sans-serif;
-            min-height: 100vh;
-            transition: background-color 0.5s ease, color 0.5s ease;
-            overflow-x: hidden;
-        }
-
-        #particles-js {
-            position: fixed;
-            width: 100%;
-            height: 100%;
-            top: 0;
-            left: 0;
-            z-index: -1;
-            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
-        }
-
-        .glass-card {
-            background: var(--card-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: all 0.3s ease;
-        }
-
-        html:not(.dark) .glass-card {
-            border: 1px solid rgba(0, 0, 0, 0.05);
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
-        }
-
-        .glass-card:hover {
-            border-color: var(--accent-color);
-            transform: translateY(-2px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-        }
-
-        .status-pulse { animation: pulse-animation 2s infinite; }
-        @keyframes pulse-animation {
-            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
-            70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
-        }
-
-        /* Scrollbar Styling */
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
-        html:not(.dark) .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; }
-        
-        /* Floating Action Button (FAB) */
-        .fab-container {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            z-index: 50;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 15px;
-        }
-        
-        .fab-wrapper {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            transform: translateX(20px);
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55);
-        }
-
-        .fab-label {
-            background: var(--card-bg);
-            color: var(--text-primary);
-            padding: 6px 12px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: bold;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            backdrop-filter: blur(4px);
-            pointer-events: none;
-        }
-        
-        .fab-button {
-            width: 45px;
-            height: 45px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255,255,255,0.1);
-            transition: transform 0.2s;
-        }
-
-        .fab-button:hover { transform: scale(1.1); }
-        
-        .fab-main {
-            width: 65px;
-            height: 65px;
-            background: linear-gradient(135deg, #f97316, #ea580c);
-            color: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            cursor: pointer;
-            box-shadow: 0 10px 25px rgba(249, 115, 22, 0.4);
-            z-index: 51;
-            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-
-        .fab-container.active .fab-wrapper {
-            transform: translateX(0);
-            opacity: 1;
-            visibility: visible;
-        }
-        
-        .fab-container.active .fab-main {
-            transform: rotate(45deg);
-            background: #ef4444;
-            box-shadow: 0 10px 25px rgba(239, 68, 68, 0.4);
-        }
-
-        .animate-slide-in { animation: slideIn 0.5s ease forwards; }
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-    </style>
-</head>
-<body class="p-4 md:p-8 lg:p-12 transition-colors duration-500">
-
-    <div id="particles-js"></div>
-
-    <div class="fab-container" id="fabMenu">
-        <div class="fab-wrapper" style="transition-delay: 100ms;">
-            <div class="fab-label">Ganti Tema</div>
-            <div class="fab-button bg-slate-800 text-white dark:bg-white dark:text-slate-900" onclick="toggleTheme()">
-                <i class="fas fa-adjust"></i>
-            </div>
-        </div>
-        <div class="fab-wrapper" style="transition-delay: 50ms;">
-            <div class="fab-label">Reset URL</div>
-            <div class="fab-button bg-blue-600 text-white" onclick="askReset()">
-                <i class="fas fa-link"></i>
-            </div>
-        </div>
-        <div class="fab-wrapper" style="transition-delay: 0ms;">
-            <div class="fab-label">Bantuan</div>
-            <div class="fab-button bg-green-600 text-white" onclick="window.open('https://t.me/chandikaprobot', '_blank')">
-                <i class="fab fa-telegram-plane"></i>
-            </div>
-        </div>
-        <div class="fab-main" onclick="toggleFab()" title="Menu">
-            <i class="fas fa-cog"></i>
-        </div>
-    </div>
-
-    <div id="ngrok-modal" class="hidden fixed inset-0 z-[9999] flex items-center justify-center p-4 backdrop-blur-lg bg-black/60 transition-all duration-300">
-        <div class="glass-card bg-white/90 dark:bg-slate-900/90 p-8 rounded-3xl max-w-md w-full text-center border border-orange-500/50 shadow-[0_0_50px_rgba(249,115,22,0.3)] animate-slide-in">
-            <div class="mx-auto w-20 h-20 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center mb-4 animate-bounce">
-                <i class="fas fa-satellite-dish text-4xl text-orange-600"></i>
-            </div>
-            <h2 class="text-3xl font-black text-slate-800 dark:text-white mb-2 tracking-tight">SYSTEM LINK</h2>
-            <p class="text-slate-600 dark:text-slate-400 text-sm mb-6 font-medium">Masukkan URL Ngrok untuk menghubungkan Command Center</p>
-            <div class="relative mb-6">
-                <span class="absolute left-4 top-3.5 text-slate-400"><i class="fas fa-link"></i></span>
-                <input type="text" id="ngrok-input" placeholder="https://xxxx.ngrok-free.app" 
-                    class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl py-3 pl-10 pr-4 text-slate-900 dark:text-white font-bold focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 focus:outline-none transition-all">
-            </div>
-            <button onclick="saveNgrokUrl()" class="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-black py-4 rounded-xl transition-all shadow-lg shadow-orange-500/30 active:scale-95 text-sm tracking-[0.2em]">
-                HUBUNGKAN
-            </button>
-        </div>
-    </div>
-
-    <div id="confirm-modal" class="hidden fixed inset-0 z-[10000] flex items-center justify-center p-4 backdrop-blur-md bg-black/70">
-        <div class="glass-card p-6 rounded-3xl max-w-sm w-full text-center border border-red-500/40 shadow-2xl animate-slide-in bg-slate-900">
-            <div class="mx-auto w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-4">
-                <i class="fas fa-exclamation-triangle text-3xl text-red-500"></i>
-            </div>
-            <h3 class="text-xl font-bold text-white mb-2">Putus Koneksi?</h3>
-            <p class="text-sm text-slate-400 mb-6">Dashboard akan kehilangan akses ke robot trading.</p>
-            <div class="flex gap-3 justify-center">
-                <button onclick="closeConfirm()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-xl text-sm font-bold">BATAL</button>
-                <button onclick="executeReset()" class="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-xl text-sm font-bold shadow-lg shadow-red-600/20">YA, PUTUS</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="max-w-[1500px] mx-auto">
-        <header class="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
-            <div class="text-center md:text-left">
-                <h1 class="text-4xl md:text-5xl font-extrabold tracking-tighter italic text-slate-900 dark:text-white">
-                    CHANDIKA<span class="text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-yellow-500 italic">PRO</span>
-                </h1>
-                <p class="text-[10px] md:text-xs text-slate-500 dark:text-slate-400 tracking-[0.4em] uppercase mt-2 font-bold">
-                    Smart Sultan Trader V9.0.2
-                </p>
-            </div>
-            <div class="flex items-center gap-4">
-                <div id="status-badge" class="px-6 py-2 rounded-full text-xs font-bold glass-card border border-slate-300 dark:border-slate-700 tracking-widest transition-all">
-                    WAITING...
-                </div>
-                <div class="hidden md:block glass-card p-2 px-4 rounded-xl text-xs font-mono font-bold text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                    <span id="live-clock">00:00:00</span>
-                </div>
-            </div>
-        </header>
-
-        <div class="dashboard-grid grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8">
-            
-            <div class="lg:col-span-1 space-y-6">
-                <div class="glass-card rounded-[2rem] p-8 text-center relative overflow-hidden shadow-2xl border-t-4 border-t-orange-500">
-                    <div class="absolute top-0 right-0 p-4 opacity-10">
-                        <i class="fas fa-wallet text-6xl text-slate-500"></i>
-                    </div>
-                    <p class="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Total Equity</p>
-                    <h2 id="equity" class="text-3xl lg:text-4xl font-black tracking-tighter text-slate-900 dark:text-white transition-colors duration-300">
-                        Rp 0
-                    </h2>
-                    <div id="pnl-container" class="text-lg font-bold mt-2 transition-all">
-                        <span id="live-pnl" class="text-slate-400">Rp 0</span>
-                    </div>
-                </div>
-
-                <div class="glass-card rounded-[2rem] p-6 shadow-xl h-[400px] flex flex-col">
-                    <div class="flex justify-between items-center mb-4 border-b border-slate-200 dark:border-slate-700 pb-2">
-                        <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                            <i class="fas fa-layer-group text-blue-500"></i> Posisi Aktif
-                        </h3>
-                        <span id="pos-count" class="bg-orange-500 text-white text-[10px] px-2 py-1 rounded-md font-bold">0</span>
-                    </div>
-                    <div id="position-list" class="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-2">
-                        <div class="flex flex-col items-center justify-center h-full text-slate-400 opacity-50">
-                            <i class="fas fa-box-open text-3xl mb-2"></i>
-                            <p class="text-xs">Tidak ada trading aktif</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="lg:col-span-2 glass-card rounded-[2rem] p-6 flex flex-col h-[500px] lg:h-[650px] relative overflow-hidden">
-                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-500 via-blue-500 to-purple-500"></div>
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 flex items-center gap-2">
-                        <i class="fas fa-terminal text-orange-500"></i> System Logs (Live)
-                    </h3>
-                    <div class="flex gap-2">
-                        <span class="w-3 h-3 rounded-full bg-red-500"></span>
-                        <span class="w-3 h-3 rounded-full bg-yellow-500"></span>
-                        <span class="w-3 h-3 rounded-full bg-green-500"></span>
-                    </div>
-                </div>
-                <div id="logs" class="flex-grow overflow-y-auto font-mono text-xs text-slate-600 dark:text-slate-400 space-y-2 custom-scrollbar p-4 bg-slate-50/50 dark:bg-black/20 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <div class="opacity-50 italic text-center mt-10">--- Menunggu koneksi server ---</div>
-                </div>
-            </div>
-
-            <div class="lg:col-span-1 space-y-6">
-                <div class="glass-card rounded-[2rem] p-8">
-                    <h3 class="text-xs font-bold uppercase tracking-widest text-slate-500 mb-6 text-center">Action Panel</h3>
-                    <div class="grid grid-cols-1 gap-4">
-                        <button onclick="sendControl('START')" class="group relative overflow-hidden bg-green-500/10 hover:bg-green-500 border border-green-500/50 text-green-600 dark:text-green-400 hover:text-white font-bold py-6 rounded-2xl transition-all shadow-lg active:scale-95">
-                            <div class="flex flex-col items-center relative z-10">
-                                <i class="fas fa-rocket text-2xl mb-2 group-hover:animate-bounce"></i>
-                                <span class="text-[10px] uppercase tracking-[0.2em]">Start Trading</span>
-                            </div>
-                        </button>
-                        <button onclick="sendControl('STOP')" class="group relative overflow-hidden bg-red-500/10 hover:bg-red-500 border border-red-500/50 text-red-600 dark:text-red-400 hover:text-white font-bold py-6 rounded-2xl transition-all shadow-lg active:scale-95">
-                            <div class="flex flex-col items-center relative z-10">
-                                <i class="fas fa-hand-paper text-2xl mb-2"></i>
-                                <span class="text-[10px] uppercase tracking-[0.2em]">Stop System</span>
-                            </div>
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="glass-card rounded-2xl p-4 text-center">
-                    <p class="text-[10px] text-slate-400 uppercase tracking-widest">Latency</p>
-                    <p class="text-xl font-bold text-orange-500" id="ping-val">-- ms</p>
-                </div>
-            </div>
-
-        </div>
-    </div>
-
-        <footer class="mt-12 mb-24 md:mb-12 text-center space-y-4 animate-slide-in" style="animation-delay: 0.2s;">
-            <div class="inline-block glass-card px-6 py-3 rounded-full border border-slate-200 dark:border-slate-700/50">
-                <div class="flex flex-col md:flex-row items-center gap-2 md:gap-4 text-xs font-mono text-slate-500 dark:text-slate-400">
-                    
-                    <span class="font-bold tracking-widest">© 2026 CHANDIKA PRO</span>
-                    
-                    <span class="hidden md:block text-orange-500">•</span>
-                    
-                    <a href="https://khafienew-hub.github.io/Chandika/" target="_blank" 
-                       class="group flex items-center gap-2 hover:text-orange-500 transition-colors duration-300">
-                        <i class="fab fa-github text-lg group-hover:scale-110 transition-transform"></i>
-                        <span class="border-b border-transparent group-hover:border-orange-500 pb-0.5">
-                            khafienew-hub.github.io/Chandika/
-                        </span>
-                    </a>
-
-                </div>
-            </div>
-            
-            <p class="text-[10px] text-slate-400 dark:text-slate-600 tracking-[0.2em] uppercase">
-                Secure Connection • Version 9.0.2 • Ready
-            </p>
-        </footer>
-        </div>
-
-    <script>
-        // CONFIG & VARIABLES
-        let API_URL = ""; 
-        const STORAGE_KEY = 'chandika_ngrok_url';
-        const THEME_KEY = 'chandika_theme';
-        const inputModal = document.getElementById('ngrok-modal');
-        const confirmModal = document.getElementById('confirm-modal');
-        const inputField = document.getElementById('ngrok-input');
-        const htmlEl = document.documentElement;
-
-        // 1. THEME & PARTICLES
-        function initTheme() {
-            const savedTheme = localStorage.getItem(THEME_KEY) || 'dark';
-            if(savedTheme === 'dark') { htmlEl.classList.add('dark'); } 
-            else { htmlEl.classList.remove('dark'); }
-            initParticles(savedTheme);
-        }
-
-        function toggleTheme() {
-            const isDark = htmlEl.classList.contains('dark');
-            const newTheme = isDark ? 'light' : 'dark';
-            htmlEl.classList.toggle('dark');
-            localStorage.setItem(THEME_KEY, newTheme);
-            initParticles(newTheme);
-        }
-
-        function initParticles(theme) {
-            const isDark = theme === 'dark';
-            const colorDot = isDark ? '#f97316' : '#ea580c';
-            const colorLine = isDark ? '#ffffff' : '#000000';
-            const opacityLine = isDark ? 0.1 : 0.15;
-
-            particlesJS("particles-js", {
-                "particles": {
-                    "number": { "value": 60, "density": { "enable": true, "value_area": 800 } },
-                    "color": { "value": colorDot },
-                    "shape": { "type": "circle" },
-                    "opacity": { "value": 0.5 },
-                    "size": { "value": 3, "random": true },
-                    "line_linked": { "enable": true, "distance": 150, "color": colorLine, "opacity": opacityLine, "width": 1 },
-                    "move": { "enable": true, "speed": 2 }
-                },
-                "interactivity": {
-                    "detect_on": "canvas",
-                    "events": { "onhover": { "enable": true, "mode": "grab" }, "onclick": { "enable": true, "mode": "push" } }
-                }
-            });
-        }
-
-        // 2. FAB MENU LOGIC
-        function toggleFab() { document.getElementById('fabMenu').classList.toggle('active'); }
-        document.addEventListener('click', function(e) {
-            const menu = document.getElementById('fabMenu');
-            if (!menu.contains(e.target) && menu.classList.contains('active')) menu.classList.remove('active');
-        });
-
-        // 3. SYSTEM LOGIC
-        function initSystem() {
-            const savedUrl = localStorage.getItem(STORAGE_KEY);
-            if (savedUrl) { API_URL = savedUrl; startDashboard(); } 
-            else { inputModal.classList.remove('hidden'); document.getElementById('status-badge').innerText = "SETUP REQUIRED"; }
-        }
-
-        function saveNgrokUrl() {
-            let val = inputField.value.trim();
-            if (!val) { alert("Masukkan URL!"); return; }
-            if (!val.startsWith("http")) val = "https://" + val;
-            if (val.endsWith("/")) val = val.slice(0, -1);
-            localStorage.setItem(STORAGE_KEY, val);
-            location.reload();
-        }
-
-        function askReset() { confirmModal.classList.remove('hidden'); }
-        function closeConfirm() { confirmModal.classList.add('hidden'); }
-        function executeReset() { localStorage.removeItem(STORAGE_KEY); location.reload(); }
-
-        setInterval(() => { document.getElementById('live-clock').innerText = new Date().toLocaleTimeString('id-ID'); }, 1000);
-
-        function startDashboard() { updateData(); setInterval(updateData, 2000); }
-
-        async function updateData() {
-            if(!API_URL) return;
-            const startPing = Date.now();
-            
-            try {
-                const response = await fetch(`${API_URL}/status`, { headers: { 'ngrok-skip-browser-warning': 'true' } });
-                const data = await response.json();
-                
-                // Ping & Equity
-                document.getElementById('ping-val').innerText = (Date.now() - startPing) + " ms";
-                document.getElementById('equity').innerText = "$ " + (data.account_equity || 0).toLocaleString('en-US', {minimumFractionDigits: 2});
-
-                // PnL Style
-                const pnl = data.total_pnl || 0;
-                const pnlEl = document.getElementById('live-pnl');
-                pnlEl.innerText = (pnl >= 0 ? "+ " : "- ") + "$ " + Math.abs(pnl).toFixed(2);
-                pnlEl.className = pnl >= 0 ? "text-green-500 font-bold text-xl drop-shadow-sm" : "text-red-500 font-bold text-xl drop-shadow-sm";
-
-                // Status Badge
-                const badge = document.getElementById('status-badge');
-                if(data.is_running) {
-                    badge.innerText = "● SYSTEM ACTIVE";
-                    badge.className = "px-6 py-2 rounded-full text-[10px] font-bold glass-card text-green-500 border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.3)] status-pulse";
-                } else {
-                    badge.innerText = "● PAUSED";
-                    badge.className = "px-6 py-2 rounded-full text-[10px] font-bold glass-card text-red-500 border-red-500/50";
-                }
-
-                // Render Trades
-                renderTrades(data.active_trades);
-
-                // Render Logs (DIBATASI 15 TERAKHIR)
-                renderLogs(data.last_logs);
-
-            } catch (e) {
-                document.getElementById('status-badge').innerText = "• RECONNECTING...";
-            }
-        }
-
-        function renderTrades(trades) {
-            const posList = document.getElementById('position-list');
-            const posCount = document.getElementById('pos-count');
-            
-            if (trades && trades.length > 0) {
-                posCount.innerText = trades.length;
-                posList.innerHTML = trades.map(trade => {
-                    const pTrade = trade.profit; 
-                    return `
-                    <div class="bg-slate-800/60 dark:bg-slate-200/60 border border-white/5 dark:border-slate-300/5 rounded-2xl p-4 hover:border-orange-500/20 transition-all">
-                        <div class="flex justify-between items-start mb-2">
-                            <div>
-                                <span class="text-[9px] font-black px-2 py-0.5 rounded ${trade.type === 'BUY' ? 'bg-blue-500/20 text-blue-400' : 'bg-red-500/20 text-red-400'}">${trade.type}</span>
-                                <span class="text-xs font-bold ml-1 text-white dark:text-slate-900">${trade.symbol}</span>
-                            </div>
-                            <div class="text-xs font-bold ${pTrade >= 0 ? 'text-green-400' : 'text-red-400'}">
-                                ${pTrade >= 0 ? '+' : '-'} $${Math.abs(pTrade).toFixed(2)}
-                            </div>
-                        </div>
-                        <div class="flex justify-between items-center text-[9px] text-slate-500 border-t border-white/5 dark:border-slate-300/5 pt-2">
-                            <span>Lot: <span class="text-slate-300 dark:text-slate-700 font-bold">${trade.volume}</span></span>
-                            <span>SL: <span class="text-red-400/70">${trade.sl || '---'}</span></span>
-                            <span>TP: <span class="text-green-400/70">${trade.tp || '---'}</span></span>
-                        </div>
-                    </div>`;
-                }).join('');
-            } else {
-                posCount.innerText = "0";
-                posList.innerHTML = `<p class="text-[10px] text-slate-600 italic text-center py-4">No active trades</p>`;
-            }
-        }
-
-        // --- FUNGSI LOG YANG SUDAH DIPERBAIKI ---
-        function renderLogs(logs) {
-            const logContainer = document.getElementById('logs');
-            if(logs && logs.length > 0) {
-                // AMBIL 15 LOG TERAKHIR SAJA
-                const limitedLogs = logs.slice(-15);
-                
-                logContainer.innerHTML = limitedLogs.map(line => 
-                    `<div class="border-b border-white/5 dark:border-slate-300/5 pb-2 hover:bg-white/5 dark:hover:bg-slate-300/5 transition-colors p-2 rounded-lg">
-                        <span class="text-orange-500/40 mr-2 font-mono">>>></span> ${line}
-                    </div>`
-                ).join("");
-                
-                // Auto scroll ke paling bawah
-                logContainer.scrollTop = logContainer.scrollHeight;
-            }
-        }
-
-        async function sendControl(cmd) {
-            if(!API_URL) return;
-            if(confirm("Konfirmasi perintah: " + cmd + "?")) {
-                try {
-                    await fetch(`${API_URL}/remote_control`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-                        body: JSON.stringify({ command: cmd })
-                    });
-                    alert("Perintah Terkirim!");
-                } catch(e) { alert("Gagal kirim"); }
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            initTheme();
-            initSystem();
-        });
-
-        // Service Worker Reg
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW Fail:', err));
-            });
-        }
-    </script>
-    <script>
-        // Cek apakah browser mendukung Service Worker
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', async () => {
-                try {
-                    // Mendaftarkan file sw.js
-                    // Scope './' berarti SW mengontrol semua file di folder ini
-                    const registration = await navigator.serviceWorker.register('./sw.js', {
-                        scope: './'
-                    });
-                    
-                    console.log('✅ PWA Service Worker Registered:', registration.scope);
-                    
-                    // Opsional: Cek update
-                    registration.onupdatefound = () => {
-                        const installingWorker = registration.installing;
-                        installingWorker.onstatechange = () => {
-                            if (installingWorker.state === 'installed') {
-                                if (navigator.serviceWorker.controller) {
-                                    console.log('🔄 Update tersedia. Silakan refresh.');
-                                } else {
-                                    console.log('⚡ Aplikasi siap digunakan offline.');
-                                }
-                            }
-                        };
-                    };
-                } catch (error) {
-                    console.error('❌ PWA Registration Failed:', error);
-                }
-            });
-        }
-    </script>
-</body>
-</html>
+                    return networkResponse;
+                });
+            })
+            .catch(() => {
+                // Jika internet mati, ambil dari cache
+                return caches.match(event.request);
+            })
+    );
+});

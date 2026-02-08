@@ -330,5 +330,19 @@
         // JALANKAN CHECKER PERTAMA KALI
         initSystem();
     </script>
+    <script>
+    // REGISTRASI SERVICE WORKER (AGAR BISA DI-INSTALL)
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then((reg) => {
+                    console.log('Service worker registered.', reg);
+                })
+                .catch((err) => {
+                    console.log('Service worker registration failed:', err);
+                });
+        });
+    }
+</script>
 </body>
 </html>
